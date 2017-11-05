@@ -66,6 +66,8 @@ go:	mov	ax,cs		!cs的值为INITSEG(0x9000),语句执行后ax也为INITSEG
 	mov	ss,ax		!ss的值为INITSEG
 	mov	sp,#0xFF00		! arbitrary value >>512
 
+	
+!!该部分的作用是将setup部分的代码从磁盘中读取到内存中	
 ! load the setup-sectors directly after the bootblock.
 ! Note that 'es' is already set up.
 
@@ -75,7 +77,7 @@ load_setup:
 	mov	bx,#0x0200		! address = 512, in INITSEG,将磁盘数据读到es:bx处，也就是90000+512=90512处
 	mov	ax,#0x0200+SETUPLEN	! service 2, nr of sectors,ah=02代表读,al=4代表要读入4个扇区,也就是要读入2,3,4,5这四个扇区
 	int	0x13			! read it,调用13号中断读取硬盘
-	jnc	ok_load_setup		! ok - continue，如果上面的int 13没有出错，就跳转到ok_load_setup
+	jnc	ok_load_setup		!! ok - continue，如果上面的int 13没有出错，就跳转到ok_load_setup
 	mov	dx,#0x0000
 	mov	ax,#0x0000		! reset the diskette
 	int	0x13
@@ -85,20 +87,22 @@ ok_load_setup:
 
 ! Get disk drive parameters, specifically nr of sectors/track
 
-	mov	dl,#0x00		!读取驱动器0的参数
-	mov	ax,#0x0800		! AH=8 is get drive parameters
+	mov	dl,#0x00		!!读取驱动器0的参数
+	mov	ax,#0x0800		!! AH=8 is get drive parameters，该功能的返回参数，CH=最大磁道数低8位，CL(0:5)=每磁道最大扇区数，CL(6:7)=最大磁道数高两位，DH=最大磁头数
 	int	0x13
 	mov	ch,#0x00
-	seg cs				!设置段超越
-	mov	sectors,cx		!将cx的值移动到cs:sectors
+	seg cs				!!设置段超越，如果不设置那么mov sector,cx的语义是将cx的值移动到ds:sector处，但此时的ds与cs的值是完全一样的为什么还要使用段超越呢
+						!!我的理解是，我们使用的sectors是在代码最后定义好的，也就是说无论如何这个数据是一定在代码段下的，这样使用段超越是一种最稳妥的行为
+	mov	sectors,cx		!!将cx的值移动到cs:sectors，这里linus默认将cl就当做了每磁道的扇区数，而没有管(6:7)位的磁道号高两位，是因为目前的磁道数都还没有达到256，故这两位可能默认为0了
+	
 	mov	ax,#INITSEG		
-	mov	es,ax			!因为int 0x13是会修改es的，现在修改回来
+	mov	es,ax			!!因为int 0x13是会修改es的，现在修改回来
 
 ! Print some inane message
 
 	mov	ah,#0x03		! read cursor pos
 	xor	bh,bh
-	int	0x10			!如果不读取当前鼠标的位置，下面输出的东西不会在接下来的地方显示出来，而是在屏幕的最上面显示
+	int	0x10			!!如果不读取当前鼠标的位置，下面输出的东西不会在接下来的地方显示出来，而是在屏幕的最上面显示
 	
 	mov	cx,#24
 	mov	bx,#0x0007		! page 0, attribute 7 (normal)
@@ -108,7 +112,7 @@ ok_load_setup:
 
 ! ok, we've written the message, now
 ! we want to load the system (at 0x10000)
-
+!!到现在为止，bootsect与setup已经加载到内存中了，开始加载系统
 	mov	ax,#SYSSEG
 	mov	es,ax		! segment of 0x010000
 	call	read_it
@@ -155,20 +159,20 @@ track:	.word 0			! current track
 
 read_it:
 	mov ax,es			
-	test ax,#0x0fff      !0x0fff与ax的值0x1000做比较
+	test ax,#0x0fff      !!0x0fff与ax的值0x1000按位相与结果为0
 die:	jne die			! es must be at 64kB boundary
 	xor bx,bx		! bx is starting address within segment
 rp_read:
-	mov ax,es
-	cmp ax,#ENDSEG		! have we loaded all yet?
+	mov ax,es			
+	cmp ax,#ENDSEG		! have we loaded all yet? !!判断es是否已经到达ENDSEG，如果不是进入ok1_read
 	jb ok1_read
 	ret
 ok1_read:
-	seg cs
-	mov ax,sectors
-	sub ax,sread
-	mov cx,ax
-	shl cx,#9
+	seg cs				!!仍然是设置段超越，原因与上面相同
+	mov ax,sectors		!!获得扇区个数
+	sub ax,sread		!!用磁道所有扇区个数-读取的扇区个数=未读扇区个数
+	mov cx,ax			!!cx存储未读扇区个数
+	shl cx,#9			!!左移9位的意思就是乘512
 	add cx,bx
 	jnc ok2_read
 	je ok2_read
