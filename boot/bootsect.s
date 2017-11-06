@@ -173,48 +173,48 @@ ok1_read:
 	sub ax,sread		!!用磁道所有扇区个数-读取的扇区个数=未读扇区个数
 	mov cx,ax			!!cx存储未读扇区个数
 	shl cx,#9			!!左移9位的意思就是乘512
-	add cx,bx
-	jnc ok2_read
+	add cx,bx			!!这里的bx初始为0，但是在完成一次int 13h,ax=02h的时候，bx的数值就是es段的偏移地址，也就是读缓冲区的起始地址
+	jnc ok2_read		!!如果将要读取的数据没有超过64kb，那么就跳转到ok2_read
 	je ok2_read
 	xor ax,ax
 	sub ax,bx
 	shr ax,#9
 ok2_read:
-	call read_track
-	mov cx,ax
-	add ax,sread
-	seg cs
-	cmp ax,sectors
-	jne ok3_read
-	mov ax,#1
-	sub ax,head
-	jne ok4_read
-	inc track
+	call read_track		!!读扇区
+	mov cx,ax			!!此次操作应该读取的扇区数,这里的ax值是ok1_read中计算出来的，也就是(sectors-sread)
+	add ax,sread		!!这个值是当前磁道上已经读取的扇区数，也就是sectors(即每磁道的扇区数，在不出错的情况下，现在已经将第一个磁道的所有扇区读取完毕)
+	seg cs				!!继续设置段超越，因为需要对代码中存储的变量进行写操作
+	cmp ax,sectors		!!计算ax-sectors的结果，将影响各种标志寄存器的值
+	jne ok3_read		!!如果上面的相减结果不为0说明，还没有读完当前磁道的所有扇区，那么执行ok3_read
+	mov ax,#1			!!接下来读磁道另一磁头上的数据，如果已经完成，则去读下一磁道
+	sub ax,head			!!判断当前磁头
+	jne ok4_read		!!如果是0磁头，则再去读1磁头上的扇区数据
+	inc track			!!否则读下一磁道
 ok4_read:
 	mov head,ax
 	xor ax,ax
 ok3_read:
-	mov sread,ax
-	shl cx,#9
-	add bx,cx
-	jnc rp_read
-	mov ax,es
-	add ax,#0x1000
-	mov es,ax
-	xor bx,bx
-	jmp rp_read
+	mov sread,ax		!!保存ax，也就是已读扇区数
+	shl cx,#9			!!计算上一次读取数据的字节数
+	add bx,cx			!!将当前的段内偏移加上再读一次磁盘会发生的偏移
+	jnc rp_read			!!如果上面的值小于64kb也就是一个段仍可以容纳，那么就调用rp_read继续读，否则就要调整当前段，为下一次读做准备
+	mov ax,es			
+	add ax,#0x1000		
+	mov es,ax			!!修改段基质，跳到下一个段，因为本段已经无法满足继续的读操作了
+	xor bx,bx			!!清空偏移量
+	jmp rp_read			!!继续读
 
 read_track:
 	push ax
 	push bx
 	push cx
 	push dx
-	mov dx,track
-	mov cx,sread
-	inc cx
-	mov ch,dl
-	mov dx,head
-	mov dh,dl
+	mov dx,track	!!获得当前的磁道号
+	mov cx,sread	!!获取已经读了的扇区数
+	inc cx			!!当前扇区+1代表要读的扇区
+	mov ch,dl		!!ch代表当前磁道号的低8位
+	mov dx,head		!!获取当前的磁头号
+	mov dh,dl		!!dh=磁头号，这里是因为dx存储的是磁道磁头号，但是
 	mov dl,#0
 	and dx,#0x0100
 	mov ah,#2
