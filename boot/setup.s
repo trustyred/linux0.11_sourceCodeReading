@@ -66,15 +66,17 @@ start:
 
 	mov	ax,#0x0000
 	mov	ds,ax
-	lds	si,[4*0x41]	!!根据代码的这个部分了解中断向量表的结构，一个中断所占用的内存空间是4个字节，由
+	lds	si,[4*0x41]	!!根据代码的这个部分了解中断向量表的结构，一个中断所占用的内存空间是4个字节，中断号*4就是这个跟中断表项的内存地址
+					!!lds 的作用就是lds reg,mem 讲mem指向的地址高位放DS，低位放reg中
 	mov	ax,#INITSEG	!!中断号*4就是这个中断向量的首地址
 	mov	es,ax
 	mov	di,#0x0080
-	mov	cx,#0x10
+	mov	cx,#0x10	!!传送0x10字节
+					!!到这里ds:si=[中断描述符0x41的内存地址] es:di=0x9000:0x0080
 	rep
 	movsb
 
-! Get hd1 data
+! Get hd1 data		!!原理同上
 
 	mov	ax,#0x0000
 	mov	ds,ax
@@ -88,39 +90,40 @@ start:
 
 ! Check that there IS a hd1 :-)
 
-	mov	ax,#0x01500
-	mov	dl,#0x81
-	int	0x13
-	jc	no_disk1
+	mov	ax,#0x01500 !!ah=0x15代表读取设备类型功能号
+	mov	dl,#0x81	!!输入 dl=0x81其中，0x80指第一块硬盘，0x81指第二块硬盘
+	int	0x13		!!输出ah=类型码；00-没有这个盘,CF置位;01-是软盘;02-是软驱;03-是硬盘
+	jc	no_disk1	
 	cmp	ah,#3
 	je	is_disk1
 no_disk1:
-	mov	ax,#INITSEG
-	mov	es,ax
-	mov	di,#0x0090
+	mov	ax,#INITSEG	
+	mov	es,ax		
+	mov	di,#0x0090	!!设置es:di=0x9000:0x0090
 	mov	cx,#0x10
-	mov	ax,#0x00
+	mov	ax,#0x00	
 	rep
-	stosb
-is_disk1:
+	stosb			!!将al(也就是0)中的值按位复制到0x9000:0x0090-0x00A0处
+is_disk1:	
 
 ! now we want to move to protected mode ...
 
-	cli			! no interrupts allowed !
+	cli			! no interrupts allowed !		!!不可中断
 
 ! first we move the system to it's rightful place
 
 	mov	ax,#0x0000
 	cld			! 'direction'=0, movs moves forward
+!!移动system模块，在bootsect.s中将系统加载到了0x10000开始的位置，这里将系统平移到0x00000位置
 do_move:
 	mov	es,ax		! destination segment
-	add	ax,#0x1000
+	add	ax,#0x1000	!!这里的0x1000(因这里是个段地址)就代表每次移动的字节数0x8000*2=0x10000
 	cmp	ax,#0x9000
 	jz	end_move
 	mov	ds,ax		! source segment
 	sub	di,di
-	sub	si,si
-	mov 	cx,#0x8000
+	sub	si,si		!!到这里已经将ds:si=0x1000:0x0000  es:di=0x0000:0x0000设置成功
+	mov 	cx,#0x8000	!!移动0x8000个字2^16个字节64KB
 	rep
 	movsw
 	jmp	do_move
@@ -128,10 +131,10 @@ do_move:
 ! then we load the segment descriptors
 
 end_move:
-	mov	ax,#SETUPSEG	! right, forgot this at first. didn't work :-)
-	mov	ds,ax
-	lidt	idt_48		! load idt with 0,0
-	lgdt	gdt_48		! load gdt with whatever appropriate
+	mov	ax,#SETUPSEG	! right, forgot this at first. didn't work :-)	!这是setup.s程序放置的段地址
+	mov	ds,ax	
+	lidt	idt_48		! load idt with 0,0	!!将idt_48的六个字节加载到idtr寄存器
+	lgdt	gdt_48		! load gdt with whatever appropriate	!!将gdt_48的六个字节加载到gdtr寄存器中
 
 ! that was painless, now we enable A20
 
@@ -188,8 +191,9 @@ end_move:
 ! we let the gnu-compiled 32-bit programs do that. We just jump to
 ! absolute address 0x00000, in 32-bit protected mode.
 
-	mov	ax,#0x0001	! protected mode (PE) bit
-	lmsw	ax		! This is it!
+	mov	ax,#0x0001	! protected mode (PE) bit	
+	lmsw	ax		! This is it!		!!置处理器状态字。但是只有操作数的低4位被存入CR0,
+										!!也就是说只会影响PE,MP,EM,TS,其他位不会被影响，现在就进入了保护模式
 	jmpi	0,8		! jmp offset 0 of segment 8 (cs)
 
 ! This routine checks that the keyboard command queue is empty
