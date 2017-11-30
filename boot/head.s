@@ -22,7 +22,7 @@ startup_32:
 	mov %ax,%gs
 	lss _stack_start,%esp
 	call setup_idt
-	call setup_gdt
+	call setup_gdt		
 	movl $0x10,%eax		# reload all the segment registers
 	mov %ax,%ds		# after changing gdt. CS was already
 	mov %ax,%es		# reloaded in 'setup_gdt'
@@ -76,12 +76,12 @@ check_x87:
  *  written by the page tables.
  */
 setup_idt:
-	lea ignore_int,%edx
-	movl $0x00080000,%eax
-	movw %dx,%ax		/* selector = 0x0008 = cs */
-	movw $0x8E00,%dx	/* interrupt gate - dpl=0, present */
+	lea ignore_int,%edx		/*此时的edx放置的为ignore_int的地址   */
+	movl $0x00080000,%eax	/*eax=0x00080000*/
+	movw %dx,%ax		/* selector = 0x0008 = cs   eax=0x0008:dx*/
+	movw $0x8E00,%dx	/* interrupt gate - dpl=0, present   edx=ignore_int(高16位):0x8E00  */
 
-	lea _idt,%edi
+	lea _idt,%edi		/*把_idt的地址加载到edi中*/
 	mov $256,%ecx
 rp_sidt:
 	movl %eax,(%edi)
