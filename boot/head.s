@@ -76,16 +76,17 @@ check_x87:
  *  written by the page tables.
  */
 setup_idt:
-	lea ignore_int,%edx		/*此时的edx放置的为ignore_int的地址   */
+	lea ignore_int,%edx		/*此时的edx放置的为ignore_int的偏移地址   */
 	movl $0x00080000,%eax	/*eax=0x00080000*/
-	movw %dx,%ax		/* selector = 0x0008 = cs   eax=0x0008:dx*/
+	movw %dx,%ax		/* selector = 0x0008 = cs   eax=0x0008:dx(ignore_int低16位)*/
 	movw $0x8E00,%dx	/* interrupt gate - dpl=0, present   edx=ignore_int(高16位):0x8E00  */
 
 	lea _idt,%edi		/*把_idt的地址加载到edi中*/
 	mov $256,%ecx
 rp_sidt:
-	movl %eax,(%edi)
-	movl %edx,4(%edi)
+	movl %eax,(%edi)		
+	movl %edx,4(%edi)		/*以上两条指令将一个门描述符设置好，(0-15)ignore_int的低16位,(16-31)0x00080000也就是段选择符
+																(32-47)是各种标志位,(48-63)ignore的高16位*/
 	addl $8,%edi
 	dec %ecx
 	jne rp_sidt
