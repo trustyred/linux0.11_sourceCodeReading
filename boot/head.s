@@ -20,7 +20,7 @@ startup_32:
 	mov %ax,%es
 	mov %ax,%fs
 	mov %ax,%gs
-	lss _stack_start,%esp
+	lss _stack_start,%esp	/*设置系统堆栈*/
 	call setup_idt		/*初始化idt中断描述符表*/
 	call setup_gdt		/*初始化gdt全局描述符表*/
 	movl $0x10,%eax		# reload all the segment registers
@@ -29,6 +29,10 @@ startup_32:
 	mov %ax,%fs
 	mov %ax,%gs
 	lss _stack_start,%esp
+	
+/**这里用来测试A20地址线是否开启了，向0x000000地址复制一个值，然后与0x100000比较，如果一直相同就代表是回环状态，操作系统会陷入
+
+死机*/	
 	xorl %eax,%eax
 1:	incl %eax		# check that A20 really IS enabled
 	movl %eax,0x000000	# loop forever if it isn't
@@ -40,6 +44,10 @@ startup_32:
  * 486 users probably want to set the NE (#5) bit also, so as to use
  * int 16 for math errors.
  */
+/*
+下面为了检测数学协处理器是否存在，我们不多做介绍，重点集中在after_page_table 
+*/
+ 
 	movl %cr0,%eax		# check math chip
 	andl $0x80000011,%eax	# Save PG,PE,ET
 /* "orl $0x10020,%eax" here for 486 might be good */
@@ -114,6 +122,24 @@ rp_sidt:
  *  rather long comment is certainly needed :-).
  *  This routine will beoverwritten by the page tables.
  */
+ 
+/*
+*	将在代码中设置好的GDT入口加载到gdtr寄存器中，这里我们仔细看一下gdt_descr的结构
+*gdt_descr:
+*	.word 256*8-1		# so does gdt (not that that's any
+*	.long _gdt		# magic number, but it works for me :^)
+*
+*	.align 3		#代表下面代码必须以2^3次方对其
+*在gdt_descr结构中又提到了_gdt结构我们继续看下这个结构
+*_gdt:	
+*	.quad 0x0000000000000000	/* NULL descriptor */
+*	.quad 0x00c09a0000000fff	/* 16Mb */
+*	.quad 0x00c0920000000fff	/* 16Mb */
+*	.quad 0x0000000000000000	/* TEMPORARY - don't use */
+*	.fill 252,8,0			/* space for LDT's and TSS's etc */
+*gdt_descr其实就是cpu中GDTR寄存器的结构32bit+16bit，其中32bit是gdt全局描述符表的基地址，16bit是gdt表长的界限
+*_gdt就是全局描述符表,总共又256个项，每个项长8个字节
+*/ 
 setup_gdt:
 	lgdt gdt_descr
 	ret
