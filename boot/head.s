@@ -15,14 +15,14 @@
 .globl _idt,_gdt,_pg_dir,_tmp_floppy_area
 _pg_dir:
 startup_32:
-	movl $0x10,%eax
+	movl $0x10,%eax		/*在setup.s最后只是把cs寄存器设置为了保护模式下的寄存器值，在这里设置其他寄存器*/
 	mov %ax,%ds
 	mov %ax,%es
 	mov %ax,%fs
 	mov %ax,%gs
 	lss _stack_start,%esp
-	call setup_idt
-	call setup_gdt		
+	call setup_idt		/*初始化idt中断描述符表*/
+	call setup_gdt		/*初始化gdt全局描述符表*/
 	movl $0x10,%eax		# reload all the segment registers
 	mov %ax,%ds		# after changing gdt. CS was already
 	mov %ax,%es		# reloaded in 'setup_gdt'
@@ -75,6 +75,17 @@ check_x87:
  *  sure everything is ok. This routine will be over-
  *  written by the page tables.
  */
+ 
+/*
+*	理解setup_idt需要理解两个概念，分别是中断描述符表和门描述符（可以理解为中断描述符表的表项）
+*	在程序的后面有定义一个中断描述符表的数据结构，即"_idt .fill 256,8,0"这里定义了256个项，每个项8个字节，并用
+*	0填充，也就是我们的中断描述符表初始的样子，setup_idt运行后，这256项都会填写上有意义的值。下面介绍门描述符
+*   门描述符就是_idt的表项，它的作用是寻找这个中断所对应的功能，其实也就是一中寻址方式，比在bootsect.s中简陋的
+*	中断号*4的寻址方式复杂了很多。其中0-7字节中，0-1字节是低16位偏移地址，6-7字节是高16位偏移地址，2-3字节是
+*	段选择符，4-5字节是各种标志位不详细介绍，总之通过这8字节的结构我们就可以找到相应中断对应的功能，比如当我们
+*	调用0x80中断的时候，对应的就是255个表项中第80位的中断功能，通过中断描述表的第80个表项就能寻址到这个功能。
+* 
+*/ 
 setup_idt:
 	lea ignore_int,%edx		/*此时的edx放置的为ignore_int的偏移地址   */
 	movl $0x00080000,%eax	/*eax=0x00080000*/
