@@ -237,8 +237,11 @@ setup_paging:
 	movl $1024*5,%ecx		/* 5 pages - pg_dir+4 page tables */
 	xorl %eax,%eax
 	xorl %edi,%edi			/* pg_dir is at 0x000 */
-	cld;rep;stosl
-	movl $pg0+7,_pg_dir		/* set present bit/user r/w */
+	cld;rep;stosl			/* 使用stosl清0 ES:edi开始的值 根据ES=0x10，edi=0x00000000 根据ES的值去查询GDT的第三项   */
+							/*第三项为0x00c0920000000fff&0xff0000ffffff000得到段基址为0x00000000+0x00000000现在还没有启用 */                                                                        */
+							/*分页机制，所以得到的0x00000000直接就是物理地址*/	
+	movl $pg0+7,_pg_dir		/* set present bit/user r/w */	/*在代码的最开始我们可以看到_pg_dir也就是页目录，因为我们只使用了4个页表，所以我们的页目录项*/
+							/*只要4个项，而且$pg0+7代表页目录最后三个标志位设置成了1，即任何用户可访问这个页，可读写，且存在*/
 	movl $pg1+7,_pg_dir+4		/*  --------- " " --------- */
 	movl $pg2+7,_pg_dir+8		/*  --------- " " --------- */
 	movl $pg3+7,_pg_dir+12		/*  --------- " " --------- */
