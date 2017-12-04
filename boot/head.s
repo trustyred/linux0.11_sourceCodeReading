@@ -245,18 +245,18 @@ setup_paging:
 	movl $pg1+7,_pg_dir+4		/*  --------- " " --------- */
 	movl $pg2+7,_pg_dir+8		/*  --------- " " --------- */
 	movl $pg3+7,_pg_dir+12		/*  --------- " " --------- */
-	movl $pg3+4092,%edi
-	movl $0xfff007,%eax		/*  16Mb - 4096 + 7 (r/w user,p) */
+	movl $pg3+4092,%edi			/*pg3是第四个页表+4092就代表一个页表中的最后一项4*1023=4092*/
+	movl $0xfff007,%eax		/*  16Mb - 4096 + 7 (r/w user,p) 最后一项对应的物理地址就是0xfff000*/
 	std
-1:	stosl			/* fill pages backwards - more efficient :-) */
-	subl $0x1000,%eax
+1:	stosl			/* fill pages backwards - more efficient :-) 因为std改变了stosl的方向，所以每次都是edi-4*/
+	subl $0x1000,%eax	/*将16mb的物理地址每次减少4KB直到分配完16mb即可*/
 	jge 1b
 	xorl %eax,%eax		/* pg_dir is at 0x0000 */
-	movl %eax,%cr3		/* cr3 - page directory start */
-	movl %cr0,%eax
+	movl %eax,%cr3		/* cr3 - page directory start cr3寄存器放置的是页目录的地址*/
+	movl %cr0,%eax		
 	orl $0x80000000,%eax
-	movl %eax,%cr0		/* set paging (PG) bit */
-	ret			/* this also flushes prefetch-queue */
+	movl %eax,%cr0		/* set paging (PG) bit 启动分页*/
+	ret			/* this also flushes prefetch-queue 返回跳转入main函数*/
 
 .align 2
 .word 0
